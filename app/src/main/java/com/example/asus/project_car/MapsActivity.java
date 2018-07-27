@@ -136,7 +136,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         }
     };
-    void btStartF(){//有一個嚴重的BUG還沒開始接收前，arduino就開始傳資料APP會停止回應
+    void connectBT(){//有一個嚴重的BUG還沒開始接收前，arduino就開始傳資料APP會停止回應
         dialog=new AlertDialog.Builder(MapsActivity.this);
         bluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
         if(bluetoothAdapter==null){
@@ -238,7 +238,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     View.OnClickListener btStart=new View.OnClickListener() {
         @Override
         public void onClick(View view) {
-            btStartF();
+            connectBT();
         }
     };
 }
