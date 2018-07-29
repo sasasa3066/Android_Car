@@ -10,10 +10,13 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.location.Location;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
@@ -25,25 +28,34 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
 
+
 import static com.example.asus.project_car.BTActivity.isLocationEnable;
 
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
 
-    private GoogleMap mMap;
+    private static GoogleMap mMap;// Google API用戶端物件
+    private static GoogleApiClient googleApiClient;
+    private static Location location;
+    private static double latitude=0;//latitude=23.0020353;
+    private static double longitude=0;//longitude=120.264362
+
+    //Bluetooth
     private static BluetoothAdapter bluetoothAdapter;
     private static BluetoothDevice device;
     private static BluetoothSocket socket;
@@ -56,9 +68,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static byte[] readBuffer;
     private static int readBufferPosition;
     private static Thread workerThread;
+    private static Thread workerThreadForLocation;
     private final static int MESSAGE_READ = 2;
     private static int distance_byte=0;
-    Handler handler;
+    private static Handler handler;
+    private static Handler handlerForLocation;
 
     private Button btn_send;
     private Button btn_btStart;
@@ -72,7 +86,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-
+        dialog=new AlertDialog.Builder(MapsActivity.this);
+        buildGoogleApiClient();//--------------------20180729---------------
         tex_distance=(TextView)findViewById(R.id.tex_distance);
         handler=new Handler(){
             @Override
@@ -100,6 +115,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
 
+
     /**
      * Manipulates the map once available.
      * This callback is triggered when the map is ready to be used.
@@ -114,9 +130,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap = googleMap;
 
         // Add a marker in Sydney and move the camera
-        LatLng sydney = new LatLng(-34, 151);
+        LatLng sydney = new LatLng(latitude, longitude);//LatLng(latitude ,longitude);
+        Log.e("Location address is :","---------------------------------------------------Latitude:"+latitude+",Longitude:"+longitude);
         mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
         mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
+        /*while(googleApiClient.isConnected()){
+            longitude=location.getLongitude();
+            latitude=location.getLatitude();
+            LatLng latLng = new LatLng(latitude, longitude);
+            mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
+
+        }*/
+
 
     }
 
@@ -124,10 +149,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         public void onClick(View view) {
             try{
-
-
                 // 送出訊息
-                Log.e("DD","dsf");
                 String message ="5";
                 outputStream.write(message.getBytes());
 
@@ -137,7 +159,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     };
     void connectBT(){//有一個嚴重的BUG還沒開始接收前，arduino就開始傳資料APP會停止回應
-        dialog=new AlertDialog.Builder(MapsActivity.this);
         bluetoothAdapter=BluetoothAdapter.getDefaultAdapter();
         if(bluetoothAdapter==null){
             dialog.setMessage("Your device doesn't support Bluetooth");
@@ -241,4 +262,63 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             connectBT();
         }
     };
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        googleApiClient.connect();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if(googleApiClient.isConnected()){
+            googleApiClient.disconnect();
+        }
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        // 當 GoogleApiClient 連上 Google Play Service 後要執行的動作
+        location= LocationServices.FusedLocationApi.getLastLocation(googleApiClient);// 這行指令在 IDE 會出現紅線，不過仍可正常執行，可不予理會
+        if(location!=null){
+            longitude=location.getLongitude();
+            latitude=location.getLatitude();
+            /*workerThreadForLocation=new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while(googleApiClient.isConnected()){
+                        longitude=location.getLongitude();
+                        latitude=location.getLatitude();
+                        handlerForLocation.obtainMessage(MESSAGE_READ, readBufferPosition, -1, readBuffer)
+                                .sendToTarget(); // Send the obtained bytes to the UI activity
+
+                    }
+                }
+            });
+            workerThreadForLocation.start();*/
+
+        }else{
+            Toast.makeText(this, "偵測不到定位，請確認定位功能已開啟。", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
+        Log.e("***Error Message***", "Connection suspended");
+        googleApiClient.connect();
+    }
+
+    @Override
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
+        Log.i("***Error Message***", "Connection failed: ConnectionResult.getErrorCode() = " + connectionResult.getErrorCode());
+    }
+    protected synchronized void buildGoogleApiClient()//直接複製貼上的funciton
+    {
+        googleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
+    }
 }
