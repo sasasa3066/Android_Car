@@ -77,6 +77,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Button btn_send;
     private Button btn_btStart;
     private TextView tex_distance;
+    private TextView tex_location;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -89,6 +90,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         dialog=new AlertDialog.Builder(MapsActivity.this);
         buildGoogleApiClient();//--------------------20180729---------------
         tex_distance=(TextView)findViewById(R.id.tex_distance);
+        tex_location=(TextView)findViewById(R.id.tex_location);
         handler=new Handler(){
             @Override
             public void handleMessage(Message msg) {
@@ -139,13 +141,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     View.OnClickListener send=new View.OnClickListener() {
         @Override
         public void onClick(View view) {
-            try{
-                // 送出訊息
-                String message ="5";
-                outputStream.write(message.getBytes());
+            if(device!=null){//僅適用這隻程式因為這隻程式只有連接上時device才
+                try{
+                    // 送出訊息
+                    String message ="5";
+                    outputStream.write(message.getBytes());
 
-            }catch(IOException e){
+                }catch(IOException e){
 
+                }
+            }else{
+                Toast.makeText(MapsActivity.this,"Not connected BT",Toast.LENGTH_SHORT).show();
             }
         }
     };
@@ -286,10 +292,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                             handlerForLocation.post(new Runnable() {
                                 @Override
                                 public void run() {
-                                    MapsActivity.this.tex_distance.setText("經度"+longitude+'\n'+"緯度"+latitude);
+                                    MapsActivity.this.tex_location.setText("緯度:"+latitude+'\n'+"經度:"+longitude);
                                 }
                             });
-                            Thread.sleep(300);
+                            Thread.sleep(100);
 
 
                         }catch (InterruptedException e){

@@ -33,20 +33,30 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="right|top"
-        android:text="btstart"
+        android:text="Connect BT"
         android:padding="10dp"
         android:layout_marginTop="20dp"
         android:paddingRight="10dp"
         android:background="#80FFFFFF"/>
     <TextView
         android:id="@+id/tex_distance"
-        android:layout_width="250dp"
-        android:layout_height="47dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginEnd="64dp"
         android:layout_marginStart="64dp"
         android:layout_marginTop="29dp"
         android:layout_gravity="left|bottom"
         android:text="Distance"
+        android:textSize="24sp"/>
+    <TextView
+        android:id="@+id/tex_location"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="64dp"
+        android:layout_marginStart="64dp"
+        android:layout_marginTop="29dp"
+        android:layout_gravity="left|center"
+        android:text="Location"
         android:textSize="24sp"/>
 
 
