@@ -72,7 +72,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private final static int MESSAGE_READ = 2;
     private static int distance_byte=0;
     private static Handler handler;
-    private static Handler handlerForLocation;
+    private static Handler handlerForLocation=new Handler();
 
     private Button btn_send;
     private Button btn_btStart;
@@ -134,15 +134,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         Log.e("Location address is :","---------------------------------------------------Latitude:"+latitude+",Longitude:"+longitude);
         mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
         mMap.moveCamera(CameraUpdateFactory.newLatLng(sydney));
-        /*while(googleApiClient.isConnected()){
-            longitude=location.getLongitude();
-            latitude=location.getLatitude();
-            LatLng latLng = new LatLng(latitude, longitude);
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(latLng));
-
-        }*/
-
-
     }
 
     View.OnClickListener send=new View.OnClickListener() {
@@ -284,19 +275,30 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if(location!=null){
             longitude=location.getLongitude();
             latitude=location.getLatitude();
-            /*workerThreadForLocation=new Thread(new Runnable() {
+            workerThreadForLocation=new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    while(googleApiClient.isConnected()){
-                        longitude=location.getLongitude();
-                        latitude=location.getLatitude();
-                        handlerForLocation.obtainMessage(MESSAGE_READ, readBufferPosition, -1, readBuffer)
-                                .sendToTarget(); // Send the obtained bytes to the UI activity
+                    while(true){
+                        try{
+                            longitude=location.getLongitude();
+                            latitude=location.getLatitude();
+                            String msg="Latitude:"+latitude+" Longitude:"+longitude;
+                            handlerForLocation.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    MapsActivity.this.tex_distance.setText("經度"+longitude+'\n'+"緯度"+latitude);
+                                }
+                            });
+                            Thread.sleep(300);
 
+
+                        }catch (InterruptedException e){
+                            Log.e("Erroe--------*-*-*-*: ","is"+e);
+                        }
                     }
                 }
             });
-            workerThreadForLocation.start();*/
+            workerThreadForLocation.start();
 
         }else{
             Toast.makeText(this, "偵測不到定位，請確認定位功能已開啟。", Toast.LENGTH_LONG).show();
