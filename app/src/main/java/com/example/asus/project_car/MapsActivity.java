@@ -80,6 +80,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     int x=0;//測試用..................................
     int Num=0;
+    //車子指令判斷用
+    private final int MIN_TRACKING_DISTANCE=10;
+    private final int MAX_TRACKING_DISTANCE=22;//只有在MIN 跟 MAX之間車子才有動作
+    private final int BACK_DISTANCE=6;//stopdistance=MIN_TRACKING_DISTANCDE-BACK_DISDANCE
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -120,14 +124,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 super.handleMessage(msg);
                 if(msg.what == MESSAGE_READ){
                     String readMessage = null;
-                    distance_byte =0;
                     try {
                         readMessage = new String((byte[]) msg.obj, "ASCII");
                     } catch (UnsupportedEncodingException e) {
                         e.printStackTrace();
                     }
                     //textView.setText(readMessage+i++);
-                    distance_byte = readBuffer [0] & 0xFF;//直接使用別人的有時間再研究......................................
                     tex_distance.setText("前方超音波距離:"+distance_byte+'\n'+"");//這邊一定要有String不能單純只有數字
                 }
             }
@@ -168,7 +170,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             if(device!=null){//僅適用這隻程式因為這隻程式只有連接上時才有device
                 try{
                     // 送出訊息
-                    String message ="5";
+                    String message ="a";
                     outputStream.write(message.getBytes());
 
                 }catch(IOException e){
@@ -256,6 +258,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                             SystemClock.sleep(100); //pause and wait for rest of data. Adjust this depending on your sending speed.
                                             readBufferPosition = inputStream.available(); // how many bytes are ready to be read?
                                             readBufferPosition = inputStream.read(readBuffer, 0, readBufferPosition); // record how many bytes we actually read
+                                            distance_byte =0;
+                                            distance_byte = readBuffer [0] & 0xFF;//直接使用別人的有時間再研究......................................
+                                            sendInstruction(distance_byte);//送出指令
                                             handler.obtainMessage(MESSAGE_READ, readBufferPosition, -1, readBuffer)
                                                     .sendToTarget(); // Send the obtained bytes to the UI activity
                                         }
@@ -276,6 +281,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         };
         registerReceiver(broadcastReceiver, filter);
         bluetoothAdapter.startDiscovery(); //開始搜尋裝置
+    }
+    void sendInstruction(int distance){
+        String instruction="s";
+        if(distance>MIN_TRACKING_DISTANCE){
+            instruction="f";
+        }
+        try{
+            outputStream.write(instruction.getBytes());
+        }catch (IOException e){
+
+        }
     }
     View.OnClickListener btStart=new View.OnClickListener() {
         @Override
