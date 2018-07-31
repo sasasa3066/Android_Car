@@ -11,12 +11,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
@@ -27,10 +29,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -47,13 +45,14 @@ import java.util.UUID;
 import static com.example.asus.project_car.BTActivity.isLocationEnable;
 
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,LocationListener {
 
     private static GoogleMap mMap;// Google API用戶端物件
-    private static GoogleApiClient googleApiClient;
-    private static Location location;
-    private static double latitude=0;//latitude=23.0020353;
-    private static double longitude=0;//longitude=120.264362
+    private static Location locationForWifi;//------------test-----------------
+    private static Location locationForGps;
+    private static LocationManager locationManager;
+    private static double latitude=0;
+    private static double longitude=0;
 
     //Bluetooth
     private static BluetoothAdapter bluetoothAdapter;
@@ -64,21 +63,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static InputStream inputStream = null;
     private final int REQUEST_ENABLE_BT=1;
     private static final int REQUEST_CODE_ACCESS_COARSE_LOCATION = 1;
+    private static final int REQUEST_PERMISSION_PHONE_STATE = 1;
     private static AlertDialog.Builder dialog;
     private static byte[] readBuffer;
     private static int readBufferPosition;
     private static Thread workerThread;
-    private static Thread workerThreadForLocation;
     private final static int MESSAGE_READ = 2;
     private static int distance_byte=0;
     private static Handler handler;
-    private static Handler handlerForLocation=new Handler();
 
     private Button btn_send;
     private Button btn_btStart;
+    private Button btn_set;
     private TextView tex_distance;
     private TextView tex_location;
 
+    int x=0;//測試用..................................
+    int Num=0;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -88,9 +89,31 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
         dialog=new AlertDialog.Builder(MapsActivity.this);
-        buildGoogleApiClient();//--------------------20180729---------------
         tex_distance=(TextView)findViewById(R.id.tex_distance);
         tex_location=(TextView)findViewById(R.id.tex_location);
+        //----------------------------------------------copy past follow -----------------------------------------------------------------------
+        //複製網址:https://github.com/matsurigoto/AndroidGPSExample/blob/master/app/src/main/java/com/example/duranhsieh/gpsexample/MainActivity.java
+        LocationManager status = (LocationManager) (this.getSystemService(Context.LOCATION_SERVICE));
+        if (status.isProviderEnabled(LocationManager.GPS_PROVIDER) || status.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.ACCESS_FINE_LOCATION)) {
+
+                } else {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.INTERNET, Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQUEST_PERMISSION_PHONE_STATE);
+                }
+                return;
+            }
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+            Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);//使用GPS
+
+            getLocation(location);
+        } else {
+            Toast.makeText(this, "請開啟定位服務", Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS));	//開啟設定
+        }
+        //--------------------------------------------------------copy pasy above by-------------------------------------------------------------------------------------
         handler=new Handler(){
             @Override
             public void handleMessage(Message msg) {
@@ -105,7 +128,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     }
                     //textView.setText(readMessage+i++);
                     distance_byte = readBuffer [0] & 0xFF;//直接使用別人的有時間再研究......................................
-                    tex_distance.setText("前方超音波距離:"+distance_byte);//這邊一定要有String不能單純只有數字
+                    tex_distance.setText("前方超音波距離:"+distance_byte+'\n'+"");//這邊一定要有String不能單純只有數字
                 }
             }
         };
@@ -113,7 +136,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         btn_send.setOnClickListener(send);
         btn_btStart=(Button)findViewById(R.id.btn_btStart);
         btn_btStart.setOnClickListener(btStart);
-
+        btn_set=(Button)findViewById(R.id.btn_set);
+        btn_set.setOnClickListener(setNum);
     }
 
 
@@ -141,7 +165,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     View.OnClickListener send=new View.OnClickListener() {
         @Override
         public void onClick(View view) {
-            if(device!=null){//僅適用這隻程式因為這隻程式只有連接上時device才
+            if(device!=null){//僅適用這隻程式因為這隻程式只有連接上時才有device
                 try{
                     // 送出訊息
                     String message ="5";
@@ -260,73 +284,71 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     };
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        googleApiClient.connect();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        if(googleApiClient.isConnected()){
-            googleApiClient.disconnect();
+    private void getLocation(Location location) {
+        if(location != null) {
+            this.locationForGps=location;
+            longitude = locationForGps.getLongitude();
+            latitude = locationForGps.getLatitude();
+            tex_location.setText("X:"+x+'\n'+"緯度:"+latitude+'\n'+"經度:"+longitude);
+            if(x<100){
+                x++;
+            }else{
+                x=0;
+            }
+        }
+        else {
+            Toast.makeText(this, "無法定位座標", Toast.LENGTH_LONG).show();
         }
     }
 
     @Override
-    public void onConnected(@Nullable Bundle bundle) {
-        // 當 GoogleApiClient 連上 Google Play Service 後要執行的動作
-        location= LocationServices.FusedLocationApi.getLastLocation(googleApiClient);// 這行指令在 IDE 會出現紅線，不過仍可正常執行，可不予理會
-        if(location!=null){
-            longitude=location.getLongitude();
-            latitude=location.getLatitude();
-            workerThreadForLocation=new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    while(true){
-                        try{
-                            longitude=location.getLongitude();
-                            latitude=location.getLatitude();
-                            String msg="Latitude:"+latitude+" Longitude:"+longitude;
-                            handlerForLocation.post(new Runnable() {
-                                @Override
-                                public void run() {
-                                    MapsActivity.this.tex_location.setText("緯度:"+latitude+'\n'+"經度:"+longitude);
-                                }
-                            });
-                            Thread.sleep(100);
-
-
-                        }catch (InterruptedException e){
-                            Log.e("Erroe--------*-*-*-*: ","is"+e);
-                        }
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case REQUEST_PERMISSION_PHONE_STATE: {
+                // If request is cancelled, the result arrays are empty.
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                    locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, this);
+                    Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                    if(location!=null){
+                        getLocation(location);
                     }
                 }
-            });
-            workerThreadForLocation.start();
-
-        }else{
-            Toast.makeText(this, "偵測不到定位，請確認定位功能已開啟。", Toast.LENGTH_LONG).show();
+                return;
+            }
         }
     }
 
     @Override
-    public void onConnectionSuspended(int i) {
-        Log.e("***Error Message***", "Connection suspended");
-        googleApiClient.connect();
+    public void onLocationChanged(Location location) {
+        getLocation(location);
     }
 
     @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-        Log.i("***Error Message***", "Connection failed: ConnectionResult.getErrorCode() = " + connectionResult.getErrorCode());
+    public void onStatusChanged(String s, int i, Bundle bundle) {
+
     }
-    protected synchronized void buildGoogleApiClient()//直接複製貼上的funciton
-    {
-        googleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(LocationServices.API)
-                .build();
+
+    @Override
+    public void onProviderEnabled(String s) {
+
     }
+
+    @Override
+    public void onProviderDisabled(String s) {
+
+    }
+    View.OnClickListener setNum=new View.OnClickListener() {
+        @Override
+        public void onClick(View view) {
+            if(Num==0){
+                Num=1;
+            }else{
+                Num=0;
+            }
+        }
+    };
 }

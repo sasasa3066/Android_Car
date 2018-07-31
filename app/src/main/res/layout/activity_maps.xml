@@ -8,7 +8,7 @@
     tools:context="com.example.asus.project_car.MapsActivity" >
 
     <Button
-        android:id="@+id/start"
+        android:id="@+id/btn_set"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center|top"
@@ -16,7 +16,7 @@
         android:background="#80FFFFFF"
         android:padding="10dp"
         android:paddingRight="10dp"
-        android:text="Demo Button" />
+        android:text="set" />
 
     <Button
         android:id="@+id/btn_BT"
